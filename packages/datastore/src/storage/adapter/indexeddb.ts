@@ -680,7 +680,7 @@ class IndexedDBAdapter implements Adapter {
 		deleteQueue: { storeName: string; items: T[] }[]
 	): Promise<void> {
 		for await (const rel of relations) {
-			const { relationType, fieldName, modelName } = rel;
+			const { relationType, fieldName, modelName, targetName } = rel;
 			const storeName = this.getStorename(nameSpace, modelName);
 
 			const index: string =
@@ -700,11 +700,20 @@ class IndexedDBAdapter implements Adapter {
 			switch (relationType) {
 				case 'HAS_ONE':
 					for await (const model of models) {
-						const recordToDelete = <T>await this.db
-							.transaction(storeName, 'readwrite')
-							.objectStore(storeName)
-							.index(index)
-							.get(model.id);
+						let recordToDelete;
+						if (index) {
+							recordToDelete = <T>await this.db
+								.transaction(storeName, 'readwrite')
+								.objectStore(storeName)
+								.index(index)
+								.get(model.id);
+						} else {
+							recordToDelete = <T>await this.db
+								.transaction(storeName, 'readwrite')
+								.objectStore(storeName)
+								.index('byId')
+								.get(model[targetName]);
+						}
 
 						await this.deleteTraverse(
 							this.schema.namespaces[nameSpace].relationships[modelName]
