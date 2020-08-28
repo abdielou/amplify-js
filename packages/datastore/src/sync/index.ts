@@ -402,20 +402,22 @@ export class SyncEngine {
 		currentTimeStamp: number
 	): Promise<Map<SchemaModel, [string, number]>> {
 		const modelLastSync: Map<SchemaModel, [string, number]> = new Map(
-			(await this.getModelsMetadata()).map(
-				({ namespace, model, lastSync, lastFullSync, fullSyncInterval }) => {
-					const nextFullSync = lastFullSync + fullSyncInterval;
-					const syncFrom =
-						!lastFullSync || nextFullSync < currentTimeStamp
-							? 0 // perform full sync if expired
-							: lastSync; // perform delta sync
+			(await this.getModelsMetadata())
+				.filter(({ namespace, model }) => this.schema.namespaces[namespace].models[model].syncable)
+				.map(
+					({ namespace, model, lastSync, lastFullSync, fullSyncInterval }) => {
+						const nextFullSync = lastFullSync + fullSyncInterval;
+						const syncFrom =
+							!lastFullSync || nextFullSync < currentTimeStamp
+								? 0 // perform full sync if expired
+								: lastSync; // perform delta sync
 
-					return [
-						this.schema.namespaces[namespace].models[model],
-						[namespace, syncFrom],
-					];
-				}
-			)
+						return [
+							this.schema.namespaces[namespace].models[model],
+							[namespace, syncFrom],
+						];
+					}
+				)
 		);
 
 		return modelLastSync;
