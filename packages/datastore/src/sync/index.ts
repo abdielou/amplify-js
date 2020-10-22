@@ -91,6 +91,9 @@ export class SyncEngine {
 	private readonly mutationsProcessor: MutationProcessor;
 	private readonly modelMerger: ModelMerger;
 	private readonly outbox: MutationEventOutbox;
+	customDataSyncObservable?: Observable<
+		[TransformerMutationType, SchemaModel, PersistentModel]
+	>;
 
 	constructor(
 		private readonly schema: InternalSchema,
@@ -102,7 +105,10 @@ export class SyncEngine {
 		private readonly maxRecordsToSync: number,
 		private readonly syncPageSize: number,
 		conflictHandler: ConflictHandler,
-		errorHandler: ErrorHandler
+		errorHandler: ErrorHandler,
+		customDataSyncObservable?: Observable<
+			[TransformerMutationType, SchemaModel, PersistentModel]
+		>
 	) {
 		const MutationEvent = this.modelClasses[
 			'MutationEvent'
@@ -133,6 +139,7 @@ export class SyncEngine {
 			conflictHandler,
 			errorHandler
 		);
+		this.customDataSyncObservable = customDataSyncObservable;
 	}
 
 	start(params: StartParams) {
@@ -195,7 +202,8 @@ export class SyncEngine {
 									);
 								} catch (err) {
 									observer.error(err);
-									return;
+									// Ignore if a custom observable is sent
+									if (!this.customDataSyncObservable) return;
 								}
 
 								logger.log('Realtime ready');
@@ -283,22 +291,16 @@ export class SyncEngine {
 							// TODO: extract to function
 							if (!isNode) {
 								subscriptions.push(
-									dataSubsObservable.subscribe(
-										([_transformerMutationType, modelDefinition, item]) => {
-											const modelConstructor = this.userModelClasses[
-												modelDefinition.name
-											] as PersistentModelConstructor<any>;
+									dataSubsObservable.subscribe(this.onDataSubEvent)
+								);
+							}
+							//#endregion
 
-											const model = this.modelInstanceCreator(
-												modelConstructor,
-												item
-											);
-
-											this.storage.runExclusive(storage =>
-												this.modelMerger.merge(storage, model)
-											);
-										}
-									)
+							//#region Merge Custom subscriptions buffer
+							if (this.customDataSyncObservable) {
+								logger.info(`Subscribing customDataSyncObservable`);
+								subscriptions.push(
+									this.customDataSyncObservable.subscribe(this.onDataSubEvent)
 								);
 							}
 							//#endregion
@@ -396,6 +398,21 @@ export class SyncEngine {
 				subscriptions.forEach(sub => sub.unsubscribe());
 			};
 		});
+	}
+
+	private onDataSubEvent = ([_transformerMutationType, modelDefinition, item]) => {
+		const modelConstructor = this.userModelClasses[
+			modelDefinition.name
+		] as PersistentModelConstructor<any>;
+
+		const model = this.modelInstanceCreator(
+			modelConstructor,
+			item
+		);
+
+		this.storage.runExclusive(storage =>
+			this.modelMerger.merge(storage, model)
+		);
 	}
 
 	private async getModelsMetadataWithNextFullSync(

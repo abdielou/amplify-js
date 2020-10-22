@@ -1,5 +1,7 @@
 import { ModelInstanceCreator } from './datastore/datastore';
 import { exhaustiveCheck } from './util';
+import Observable from 'zen-observable-ts';
+import { TransformerMutationType } from './sync/utils';
 
 //#region Schema types
 export type Schema = UserSchema & {
@@ -434,6 +436,9 @@ export type DataStoreConfig = {
 		maxRecordsToSync?: number; // merge
 		syncPageSize?: number;
 		fullSyncInterval?: number;
+		customDataSyncObservable?: Observable<
+			[TransformerMutationType, SchemaModel, PersistentModel]
+		>;
 	};
 	conflictHandler?: ConflictHandler; // default : retry until client wins up to x times
 	errorHandler?: (error: SyncError) => void; // default : logger.warn

@@ -51,6 +51,7 @@ import {
 	USER,
 	isNullOrUndefined,
 } from '../util';
+import { TransformerMutationType } from '../sync/utils';
 
 setAutoFreeze(true);
 
@@ -545,6 +546,9 @@ class DataStore {
 	private storage: Storage;
 	private sync: SyncEngine;
 	private syncPageSize: number;
+	private customDataSyncObservable: Observable<
+		[TransformerMutationType, SchemaModel, PersistentModel]
+	>;
 
 	getModuleName() {
 		return 'DataStore';
@@ -589,7 +593,8 @@ class DataStore {
 				this.maxRecordsToSync,
 				this.syncPageSize,
 				this.conflictHandler,
-				this.errorHandler
+				this.errorHandler,
+				this.customDataSyncObservable,
 			);
 
 			// tslint:disable-next-line:max-line-length
@@ -1004,6 +1009,8 @@ class DataStore {
 			configFullSyncInterval ||
 			config.fullSyncInterval ||
 			24 * 60; // 1 day
+
+		this.customDataSyncObservable = (configDataStore && configDataStore.customDataSyncObservable);
 	};
 
 	clear = async function clear() {
