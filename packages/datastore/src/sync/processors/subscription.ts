@@ -283,20 +283,29 @@ class SubscriptionProcessor {
 					Object.values(namespace.models)
 						.filter(({ syncable }) => syncable)
 						.forEach(async modelDefinition => {
+							const modelAttribute = (modelDefinition.attributes || []).find(attr => attr && attr.type === 'model')
+							const subscriptionsTurnedOff =
+								modelAttribute &&
+								modelAttribute.properties &&
+								modelAttribute.properties.subscriptions &&
+								modelAttribute.properties.subscriptions.level &&
+								modelAttribute.properties.subscriptions.level === 'off'
 							const queriesMetadata = [
 								TransformerMutationType.CREATE,
 								TransformerMutationType.UPDATE,
 								TransformerMutationType.DELETE,
-							].map(op =>
-								this.buildSubscription(
+							].map(op => ({
+								...this.buildSubscription(
 									namespace,
 									modelDefinition,
 									op,
 									userCredentials,
 									cognitoTokenPayload,
 									oidcTokenPayload
-								)
-							);
+								),
+								subscriptionsTurnedOff,
+								modelName: modelDefinition.name
+							}));
 
 							queriesMetadata.forEach(
 								async ({
@@ -307,9 +316,17 @@ class SubscriptionProcessor {
 									ownerField,
 									ownerValue,
 									authMode,
+									subscriptionsTurnedOff,
+									modelName,
 								}) => {
 									const variables = {};
 
+									if (subscriptionsTurnedOff) {
+											logger.info(
+												`Subscription ${modelName}.${opName} turned OFF`
+											);
+											return;
+									}
 									if (isOwner) {
 										if (!ownerValue) {
 											// Check if there is an owner field, check where this error should be located
